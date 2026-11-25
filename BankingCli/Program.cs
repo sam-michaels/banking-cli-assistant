@@ -1,6 +1,13 @@
 using BankingCli;
 
-BankSession banking = new BankSession();
+OpenAiChat? chat = OpenAiChat.FromEnvironment();
+Assistant assistant = new Assistant(new BankSession(), chat);
+
+// The notice goes to stderr so redirected stdout stays identical to the starter's.
+if (chat is null && !Console.IsInputRedirected)
+{
+    Console.Error.WriteLine("Plain-English requests are off: set OPENAI_API_KEY to turn them on. Commands work as usual.");
+}
 
 while (true)
 {
@@ -16,7 +23,7 @@ while (true)
         break;
     }
 
-    CommandResult result = banking.Execute(input);
+    CommandResult result = await assistant.HandleAsync(input);
     if (result.Output.Length > 0)
     {
         Console.WriteLine(result.Output);
