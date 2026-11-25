@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace BankingCli;
 
@@ -24,6 +25,20 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         If any required detail is missing or unclear, use action "clarify" and put a short, friendly question in "question" that asks the customer to include the missing detail when they try again. Leave the other fields null.
         If the message is not a request for one of these operations, use action "clarify" with a question that says you can deposit, withdraw, transfer between chequing and savings, or show balances, and that typing exit leaves.
         """;
+
+    private const string ReplyPrompt = """
+        You tell a bank customer what happened to their request, in one or two short sentences of everyday English.
+        You are given the customer's message, the command that was run, and the bank's result.
+        Include every dollar amount from the result, written as $X.XX exactly as it appears there (for example $6.00). Do not mention any other dollar amounts, except the amount in the command.
+        If the result starts with ERROR, the bank declined the request and nothing was changed. Say so, and explain why in plain words:
+        INSUFFICIENT_FUNDS means the account doesn't have enough money; SAME_ACCOUNT means both accounts are the same;
+        INVALID_AMOUNT means the amount must be greater than zero with at most two decimal places; BALANCE_LIMIT means the account would go over its maximum balance;
+        INVALID_ACCOUNT means there is no such account.
+        Do not show the command or the error code.
+        """;
+
+    // Dollar amounts, with or without thousands separators: "$4", "$6.00", "$ 1,000.00".
+    private static readonly Regex AmountPattern = new Regex(@"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?");
 
     private static readonly JsonObject InterpretationSchema = (JsonObject)JsonNode.Parse("""
         {"type":"object","additionalProperties":false,
@@ -72,8 +87,40 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         }
 
         // Executed exactly once; the simulator validates accounts and amounts.
-        return bank.Execute(command);
+        CommandResult executed = bank.Execute(command);
+
+        // Every fallback below returns the result already in hand; the command is never run again.
+        try
+        {
+            string reply = await chat.CompleteAsync(ReplyPrompt, $"Customer: {input}\nCommand: {command}\nResult: {executed.Output}");
+            return PreservesAmounts(reply, executed.Output, command) ? new CommandResult(reply.Trim()) : executed;
+        }
+        catch (Exception)
+        {
+            return executed;
+        }
     }
+
+    // The reply must repeat every amount in the simulator output and may add only the amount the command asked for.
+    internal static bool PreservesAmounts(string reply, string simulatorOutput, string command)
+    {
+        HashSet<decimal> required = Amounts(simulatorOutput);
+        HashSet<decimal> allowed = new HashSet<decimal>(required);
+        if (decimal.TryParse(command.Split(' ')[^1], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal requested))
+        {
+            allowed.Add(requested);
+        }
+
+        HashSet<decimal> found = Amounts(reply);
+        return required.IsSubsetOf(found) && found.IsSubsetOf(allowed);
+    }
+
+    private static HashSet<decimal> Amounts(string text) =>
+        AmountPattern.Matches(text)
+            .Select(m => decimal.Parse(
+                m.Groups[1].Value.Replace(",", "") + (m.Groups[2].Success ? "." + m.Groups[2].Value : ""),
+                CultureInfo.InvariantCulture))
+            .ToHashSet();
 
     // Uses only the fields the action needs; returns null when one of them is missing.
     internal static string? BuildCommand(Interpretation i)

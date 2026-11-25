@@ -182,18 +182,107 @@ public sealed class AssistantTests
     }
 
     [Fact]
-    public async Task Interpreted_RunsCommandOnce_PrintsRawForNow()
+    public async Task Transfer_PrintsReply()
+    {
+        const string reply = "I moved $4.00 from savings to chequing. You now have $6.00 in savings and $4.00 in chequing.";
+        BankSession bank = new BankSession();
+        bank.Execute("deposit savings 10");
+        FakeChatHandler handler = new FakeChatHandler();
+        handler.EnqueueContent(Interp("transfer", from: "savings", to: "chequing", amount: 4));
+        handler.EnqueueContent(reply);
+        Assistant assistant = new Assistant(bank, FakeChat(handler));
+
+        CommandResult result = await assistant.HandleAsync("Move four dollars from savings to chequing");
+
+        Assert.Equal(reply, result.Output);
+        Assert.Equal(2, handler.Calls);
+        string userMessage = JsonNode.Parse(handler.Requests[1].Body)!["messages"]![1]!["content"]!.GetValue<string>();
+        Assert.Contains("Customer: Move four dollars from savings to chequing", userMessage);
+        Assert.Contains("Command: transfer savings chequing 4", userMessage);
+        Assert.Contains("Result: TRANSFER $4.00 FROM savings TO chequing | savings=$6.00 | chequing=$4.00", userMessage);
+    }
+
+    [Fact]
+    public async Task ReplyFailure_PrintsRawOutput_RunsOnce()
     {
         BankSession bank = new BankSession();
         bank.Execute("deposit savings 10");
         FakeChatHandler handler = new FakeChatHandler();
         handler.EnqueueContent(Interp("transfer", from: "savings", to: "chequing", amount: 4));
+        handler.Enqueue(HttpStatusCode.InternalServerError, "{}");
         Assistant assistant = new Assistant(bank, FakeChat(handler));
 
         CommandResult result = await assistant.HandleAsync("Move four dollars from savings to chequing");
 
-        Assert.Contains("TRANSFER $4.00", result.Output);
+        Assert.Equal("TRANSFER $4.00 FROM savings TO chequing | savings=$6.00 | chequing=$4.00", result.Output);
         Assert.Equal("chequing=$4.00 | savings=$6.00", Balances(bank));
-        Assert.Equal(1, handler.Calls);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task ReplyWithWrongAmount_PrintsRawOutput()
+    {
+        BankSession bank = new BankSession();
+        bank.Execute("deposit savings 10");
+        FakeChatHandler handler = new FakeChatHandler();
+        handler.EnqueueContent(Interp("transfer", from: "savings", to: "chequing", amount: 4));
+        handler.EnqueueContent("I moved $4.00 from savings to chequing. You now have $60.00 in savings and $4.00 in chequing.");
+        Assistant assistant = new Assistant(bank, FakeChat(handler));
+
+        CommandResult result = await assistant.HandleAsync("Move four dollars from savings to chequing");
+
+        Assert.Equal("TRANSFER $4.00 FROM savings TO chequing | savings=$6.00 | chequing=$4.00", result.Output);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Decline_ReplyMayQuoteRequestedAmount()
+    {
+        const string reply = "I couldn't withdraw $50.00 because chequing only has $0.00.";
+        BankSession bank = new BankSession();
+        FakeChatHandler handler = new FakeChatHandler();
+        handler.EnqueueContent(Interp("withdraw", account: "chequing", amount: 50));
+        handler.EnqueueContent(reply);
+        Assistant assistant = new Assistant(bank, FakeChat(handler));
+
+        CommandResult result = await assistant.HandleAsync("take fifty dollars out of chequing");
+
+        Assert.Equal(reply, result.Output);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task RejectedAmount_RunsOnceAndExplains()
+    {
+        const string reply = "The bank couldn't accept that amount, so nothing was changed. Amounts can have at most two decimal places.";
+        BankSession bank = new BankSession();
+        bank.Execute("deposit savings 10");
+        string before = Balances(bank);
+        FakeChatHandler handler = new FakeChatHandler();
+        handler.EnqueueContent(Interp("withdraw", account: "savings", amount: 4.999m));
+        handler.EnqueueContent(reply);
+        Assistant assistant = new Assistant(bank, FakeChat(handler));
+
+        CommandResult result = await assistant.HandleAsync("withdraw 4.999 from savings");
+
+        Assert.Equal(reply, result.Output);
+        Assert.Equal(before, Balances(bank));
+        Assert.Equal(2, handler.Calls);
+        Assert.Contains("Result: ERROR INVALID_AMOUNT", handler.Requests[1].Body);
+    }
+
+    [Fact]
+    public void AmountCheck_AcceptsThousandsSeparators()
+    {
+        Assert.True(Assistant.PreservesAmounts("You now have $1,000.00.", "DEPOSIT $1000.00 TO savings | savings=$1000.00", "deposit savings 1000"));
+    }
+
+    [Fact]
+    public void AmountCheck_RejectsMissingBalance()
+    {
+        Assert.False(Assistant.PreservesAmounts(
+            "I moved $4.00 from savings to chequing, which now has $4.00.",
+            "TRANSFER $4.00 FROM savings TO chequing | savings=$6.00 | chequing=$4.00",
+            "transfer savings chequing 4"));
     }
 }
