@@ -124,7 +124,9 @@ BankSession.Execute(input)                      ← unchanged simulator
 
 ### Call 2 — reply
 
-- Input: the user's original text, the command run, and the simulator output.
+- Input: the user's original text, the command run, and the simulator output. **The simulator output
+  contains balances**, which the reply must state, so balances do reach the API in this call (never in
+  Call 1). The decision about funds is always the simulator's.
 - Prompt: one or two sentences of everyday English. Keep every dollar amount exactly as written.
   `ERROR …` means the bank declined and nothing changed; explain why in plain words (insufficient funds,
   same account, invalid amount, balance limit).
@@ -145,10 +147,11 @@ Environment variables, using the standard OpenAI names:
 | Variable | Default | Notes |
 |---|---|---|
 | `OPENAI_API_KEY` | none | Unset → commands-only mode; behaves exactly like the starter. A one-line notice goes to **stderr** at startup when interactive. |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. Must be `https://`; plain `http://` only for localhost. Otherwise the app exits at startup with a configuration error, since the key and balances travel in the requests. |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Chosen after comparing gpt-4o-mini, gpt-4.1-mini and gpt-5-mini on the same requests: all correct, gpt-4.1-mini fastest. |
 
-HTTP timeout: 30 s. No retries, because a failure falls back immediately.
+HTTP timeout: 30 s. No retries, because a failure falls back immediately. English input longer than 500
+characters is refused before any API call (cost, hidden instructions); original commands are unaffected.
 
 ### Code layout
 

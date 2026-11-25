@@ -18,7 +18,7 @@ Both accounts start at $0.00 each time you run the program. The tests need no AP
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | none | Unset → commands only, exactly like the starter. |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. Must be `https://` (`http://` only for localhost). |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | |
 
 ```sh
@@ -57,6 +57,17 @@ Accounts are `chequing` and `savings`. Amounts are positive, with up to two deci
 4. The simulator executes that command exactly once.
 5. A second call rewrites the result as a reply. The reply must contain every dollar amount from the simulator output and no amounts other than those and the requested one.
 6. If the reply call fails or the check fails, the raw simulator output is printed. The command is not run again.
+
+## Security
+
+- **The model can't move money directly.** Its output is untrusted data, restricted by a strict schema to five actions and two account names. The app builds the command, and the unchanged simulator validates it (account, amount format, funds, different accounts). A prompt-injection attempt can at worst produce one ordinary command the user could have typed themselves.
+- **No money moves on a guess.** App-side guards, not just the prompt, refuse a request with missing details, a transfer without both accounts, or an amount that doesn't appear in what the user typed.
+- **Exactly once, fail closed.** An interpreted command runs once and is never retried. A timeout (30 s), bad key, network error or malformed model output means nothing changes.
+- **Truthful replies.** A reply that misstates a dollar amount is replaced with the simulator's raw result.
+- **Secrets and transport.** The key comes only from an environment variable, is never logged, and is not in the repo or its history. The app refuses a non-`https` endpoint (plain `http` only for `localhost`), because the key and balances travel in the requests.
+- **Small attack surface.** The app has no third-party packages; it calls the API with .NET's built-in `HttpClient`. English input over 500 characters is refused before any API call.
+- **What leaves the machine.** The user's text goes to the API, and so does the simulator's result in the reply step, which includes balances. A real deployment would need a data agreement or an in-house model; `OPENAI_BASE_URL` can point at one.
+- **Out of scope for this simulator:** authentication, authorization, audit logging and rate limiting.
 
 ## Checks I ran
 
@@ -108,11 +119,11 @@ bank> balance
 chequing=$15.00 | savings=$0.00
 ```
 
-The model never sees balances; the simulator decides there isn't enough money, and the reply explains its decision.
+The model never decides whether there is enough money: the interpretation step doesn't see balances, the simulator declines, and the reply step only explains the simulator's result.
 
 **API failure.** Running with `OPENAI_API_KEY=sk-invalid`, an English request prints "Sorry, I couldn't reach the assistant just now, so nothing was changed. You can still use commands - type help to see them." Balances are unchanged.
 
-**Automated tests.** 48 xUnit tests, no key needed (`dotnet test`). They show that the starter's example session is byte-identical and makes zero API calls; that a clarifying question, a missing detail or an amount the customer never gave changes no balance; that when the reply call fails, the raw output is printed and the command ran exactly once; and that the amount check rejects a reply with a wrong, missing or under-repeated amount.
+**Automated tests.** 54 xUnit tests, no key needed (`dotnet test`). They show that the starter's example session is byte-identical and makes zero API calls; that a clarifying question, a missing detail or an amount the customer never gave changes no balance; that when the reply call fails, the raw output is printed and the command ran exactly once; and that the amount check rejects a reply with a wrong, missing or under-repeated amount.
 
 ## Known limits
 
