@@ -20,9 +20,11 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         - transfer: needs from, to and amount. Both accounts must be named by the customer; never assume the other account.
         - balance: account is optional; leave it null to show both accounts.
         Set fields the operation doesn't use to null.
-        Never invent or guess an amount or an account. Amounts written as words are fine ("four dollars" is 4).
+        Never invent or guess an operation, an amount or an account. Amounts written as words are fine ("four dollars" is 4).
+        The operation must be stated by the customer (for example deposit, put in, withdraw, take out, move, transfer, send, check, show). A message such as "$5 from savings" that names no operation is unclear.
+        Each message stands alone: you cannot see earlier messages, so never treat a message as the answer to an earlier question.
         Vague amounts such as "some", "a few", "a little", "everything", "all of it" or "half" are not amounts.
-        If any required detail is missing or unclear, use action "clarify" and put a short, friendly question in "question" that asks the customer to include the missing detail when they try again. Leave the other fields null.
+        If any required detail is missing or unclear, use action "clarify" and put a short, friendly question in "question" that says what is missing and asks the customer to send the full request again, with an example such as "move $5 from savings to chequing". Leave the other fields null.
         If the message is not a request for one of these operations, use action "clarify" with a question that says you can deposit, withdraw, transfer between chequing and savings, or show balances, and that typing exit leaves.
         """;
 
