@@ -13,12 +13,15 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
     internal const string NeedMoreDetail = "I need a bit more detail before I change anything. Please include the amount and the account(s) when you try again.";
     internal const string NeedNumericAmount = "I couldn't find an exact amount in your request, so nothing was changed. Please include it as a number, for example 'move $5 from savings to chequing'.";
 
-    private static readonly Regex NumberPattern = new Regex(@"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?");
+    private static readonly Regex NumberPattern = new Regex(
+        @"(?<number>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?<multiplier>hundred|thousand|grand|k)?\b",
+        RegexOptions.IgnoreCase);
     private static readonly HashSet<string> NumberWords = new HashSet<string>
     {
         "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
         "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
-        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand"
+        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand",
+        "dozen", "grand"
     };
 
     private const string InterpretPrompt = """
@@ -142,14 +145,25 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
                 CultureInfo.InvariantCulture))
             .ToList();
 
-    // If the customer wrote digits, the amount must equal one of those numbers. Without digits, the request must
-    // at least contain a number word ("four"). The word's value isn't checked; the reply states the amount moved.
+    // If the customer wrote digits, the amount must equal one of those numbers, or that number times a following
+    // multiplier ("2 hundred", "5k"). Without digits, the request must at least contain a number word ("four").
+    // The word's value isn't checked; the reply states the amount moved.
     internal static bool AmountIsGrounded(string input, decimal amount)
     {
         MatchCollection numbers = NumberPattern.Matches(input);
         if (numbers.Count > 0)
         {
-            return numbers.Any(m => decimal.Parse(m.Value.Replace(",", ""), CultureInfo.InvariantCulture) == amount);
+            return numbers.Any(m =>
+            {
+                decimal number = decimal.Parse(m.Groups["number"].Value.Replace(",", ""), CultureInfo.InvariantCulture);
+                decimal multiplier = m.Groups["multiplier"].Value.ToLowerInvariant() switch
+                {
+                    "hundred" => 100m,
+                    "thousand" or "grand" or "k" => 1000m,
+                    _ => 1m
+                };
+                return amount == number || amount == number * multiplier;
+            });
         }
 
         return Regex.Split(input.ToLowerInvariant(), "[^a-z]+").Any(NumberWords.Contains);

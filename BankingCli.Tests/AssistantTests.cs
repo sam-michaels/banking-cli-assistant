@@ -304,6 +304,13 @@ public sealed class AssistantTests
     [InlineData("withdraw $4.50 from chequing", "4.5")]
     [InlineData("deposit 1,000 into savings", "1000")]
     [InlineData("move twenty-five dollars from savings to chequing", "25")]
+    [InlineData("move 2 hundred from savings to chequing", "200")]
+    [InlineData("move 2 hundred from savings to chequing", "2")]
+    [InlineData("move 2.5 thousand from savings to chequing", "2500")]
+    [InlineData("move 5k from savings to chequing", "5000")]
+    [InlineData("move 2 grand from savings to chequing", "2000")]
+    [InlineData("move a dozen dollars from savings to chequing", "12")]
+    [InlineData("move a grand from savings to chequing", "1000")]
     public void AmountIsGrounded_WhenTheCustomerStatedIt(string input, string amount)
     {
         Assert.True(Assistant.AmountIsGrounded(input, decimal.Parse(amount, CultureInfo.InvariantCulture)));
@@ -314,6 +321,8 @@ public sealed class AssistantTests
     [InlineData("move 20 bucks from chequing to savings", "25")]
     [InlineData("put some money in savings", "10")]
     [InlineData("take a buck out of chequing", "1")]
+    [InlineData("move 2 hundred from savings to chequing", "300")]
+    [InlineData("move 5k from savings to chequing", "500")]
     public void AmountIsNotGrounded_WhenTheModelSuppliedIt(string input, string amount)
     {
         Assert.False(Assistant.AmountIsGrounded(input, decimal.Parse(amount, CultureInfo.InvariantCulture)));
