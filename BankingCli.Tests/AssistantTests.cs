@@ -69,6 +69,24 @@ public sealed class AssistantTests
         Assert.Equal(0, handler.Calls);
     }
 
+    // Found in code review: routing on both errors was claimed but only UNKNOWN_COMMAND was exercised.
+    [Theory]
+    [InlineData("Move four dollars from savings to chequing", "ERROR UNKNOWN_COMMAND")]
+    [InlineData("transfer four dollars from savings to chequing", "ERROR INVALID_ARGUMENTS")]
+    [InlineData("withdraw chequing", "ERROR INVALID_ARGUMENTS")]
+    public async Task UnknownCommandOrWrongArity_GoesToModel(string input, string starterOutput)
+    {
+        Assert.Equal(starterOutput, new BankSession().Execute(input).Output);
+        FakeChatHandler handler = new FakeChatHandler();
+        Assistant assistant = new Assistant(new BankSession(), FakeChat(handler));
+        handler.EnqueueContent("""{"action":"clarify","account":null,"from":null,"to":null,"amount":null,"question":"How much?"}""");
+
+        CommandResult result = await assistant.HandleAsync(input);
+
+        Assert.Equal("How much?", result.Output);
+        Assert.Equal(1, handler.Calls);
+    }
+
     [Fact]
     public async Task NoKey_EnglishGetsStarterOutput()
     {

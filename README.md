@@ -112,7 +112,7 @@ The model never sees balances; the simulator decides there isn't enough money, a
 
 **API failure.** Running with `OPENAI_API_KEY=sk-invalid`, an English request prints "Sorry, I couldn't reach the assistant just now, so nothing was changed. You can still use commands - type help to see them." Balances are unchanged.
 
-**Automated tests.** 45 xUnit tests, no key needed (`dotnet test`). They show that the starter's example session is byte-identical and makes zero API calls; that a clarifying question, a missing detail or an amount the customer never gave changes no balance; that when the reply call fails, the raw output is printed and the command ran exactly once; and that the amount check rejects a reply with a wrong, missing or under-repeated amount.
+**Automated tests.** 48 xUnit tests, no key needed (`dotnet test`). They show that the starter's example session is byte-identical and makes zero API calls; that a clarifying question, a missing detail or an amount the customer never gave changes no balance; that when the reply call fails, the raw output is printed and the command ran exactly once; and that the amount check rejects a reply with a wrong, missing or under-repeated amount.
 
 ## Known limits
 
