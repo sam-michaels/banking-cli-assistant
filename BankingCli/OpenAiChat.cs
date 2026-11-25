@@ -8,7 +8,7 @@ namespace BankingCli;
 internal sealed class OpenAiChat(HttpClient http, Uri baseUrl, string apiKey, string model)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
-    private const string DefaultModel = "gpt-4o-mini";
+    private const string DefaultModel = "gpt-4.1-mini";
 
     private readonly Uri endpoint = new Uri(baseUrl.ToString().TrimEnd('/') + "/chat/completions");
 

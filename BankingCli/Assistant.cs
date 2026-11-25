@@ -101,26 +101,28 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         }
     }
 
-    // The reply must repeat every amount in the simulator output and may add only the amount the command asked for.
+    // The reply must repeat every amount in the simulator output (as many times as it appears there)
+    // and may add only the amount the command asked for.
     internal static bool PreservesAmounts(string reply, string simulatorOutput, string command)
     {
-        HashSet<decimal> required = Amounts(simulatorOutput);
+        List<decimal> required = Amounts(simulatorOutput);
+        List<decimal> found = Amounts(reply);
         HashSet<decimal> allowed = new HashSet<decimal>(required);
         if (decimal.TryParse(command.Split(' ')[^1], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal requested))
         {
             allowed.Add(requested);
         }
 
-        HashSet<decimal> found = Amounts(reply);
-        return required.IsSubsetOf(found) && found.IsSubsetOf(allowed);
+        return required.All(a => found.Count(f => f == a) >= required.Count(r => r == a))
+            && found.All(allowed.Contains);
     }
 
-    private static HashSet<decimal> Amounts(string text) =>
+    private static List<decimal> Amounts(string text) =>
         AmountPattern.Matches(text)
             .Select(m => decimal.Parse(
                 m.Groups[1].Value.Replace(",", "") + (m.Groups[2].Success ? "." + m.Groups[2].Value : ""),
                 CultureInfo.InvariantCulture))
-            .ToHashSet();
+            .ToList();
 
     // Uses only the fields the action needs; returns null when one of them is missing.
     internal static string? BuildCommand(Interpretation i)

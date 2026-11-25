@@ -274,7 +274,7 @@ public sealed class AssistantTests
     [Fact]
     public void AmountCheck_AcceptsThousandsSeparators()
     {
-        Assert.True(Assistant.PreservesAmounts("You now have $1,000.00.", "DEPOSIT $1000.00 TO savings | savings=$1000.00", "deposit savings 1000"));
+        Assert.True(Assistant.PreservesAmounts("I deposited $1,000.00, so savings now has $1,000.00.", "DEPOSIT $1000.00 TO savings | savings=$1000.00", "deposit savings 1000"));
     }
 
     [Fact]
@@ -284,5 +284,17 @@ public sealed class AssistantTests
             "I moved $4.00 from savings to chequing, which now has $4.00.",
             "TRANSFER $4.00 FROM savings TO chequing | savings=$6.00 | chequing=$4.00",
             "transfer savings chequing 4"));
+    }
+
+    // Found in code review: $4.00 appears twice in the result (amount moved, new chequing balance),
+    // so a reply that states it once has dropped a number.
+    [Fact]
+    public void AmountCheck_RequiresRepeatedAmountsEachTime()
+    {
+        const string output = "TRANSFER $4.00 FROM savings TO chequing | savings=$0.00 | chequing=$4.00";
+        Assert.False(Assistant.PreservesAmounts(
+            "I moved $4.00 from savings to chequing, and savings is now $0.00.", output, "transfer savings chequing 4"));
+        Assert.True(Assistant.PreservesAmounts(
+            "I moved $4.00 from savings to chequing. Savings is now $0.00 and chequing has $4.00.", output, "transfer savings chequing 4"));
     }
 }
