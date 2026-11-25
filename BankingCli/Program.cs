@@ -1,6 +1,17 @@
 using BankingCli;
 
-OpenAiChat? chat = OpenAiChat.FromEnvironment();
+OpenAiChat? chat;
+try
+{
+    chat = OpenAiChat.FromEnvironment();
+}
+catch (Exception e) when (e is ArgumentException or UriFormatException)
+{
+    // A misconfigured endpoint is refused up front rather than sending the key somewhere unsafe.
+    Console.Error.WriteLine($"Configuration error: {e.Message}");
+    return 1;
+}
+
 Assistant assistant = new Assistant(new BankSession(), chat);
 
 // The notice goes to stderr so redirected stdout stays identical to the starter's.
@@ -34,3 +45,5 @@ while (true)
         break;
     }
 }
+
+return 0;

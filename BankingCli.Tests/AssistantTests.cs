@@ -88,6 +88,18 @@ public sealed class AssistantTests
     }
 
     [Fact]
+    public async Task OverlongInput_IsRefused_NoApiCall()
+    {
+        FakeChatHandler handler = new FakeChatHandler();
+        Assistant assistant = new Assistant(new BankSession(), FakeChat(handler));
+
+        CommandResult result = await assistant.HandleAsync("Move four dollars from savings to chequing " + new string('x', 500));
+
+        Assert.Equal(Assistant.TooLong, result.Output);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
     public async Task NoKey_EnglishGetsStarterOutput()
     {
         Assistant assistant = new Assistant(new BankSession(), null);

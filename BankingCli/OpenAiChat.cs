@@ -10,7 +10,7 @@ internal sealed class OpenAiChat(HttpClient http, Uri baseUrl, string apiKey, st
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
     private const string DefaultModel = "gpt-4.1-mini";
 
-    private readonly Uri endpoint = new Uri(baseUrl.ToString().TrimEnd('/') + "/chat/completions");
+    private readonly Uri endpoint = BuildEndpoint(baseUrl);
 
     public static OpenAiChat? FromEnvironment()
     {
@@ -29,6 +29,18 @@ internal sealed class OpenAiChat(HttpClient http, Uri baseUrl, string apiKey, st
             new Uri(string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl),
             apiKey,
             string.IsNullOrWhiteSpace(model) ? DefaultModel : model);
+    }
+
+    // The API key and account balances travel in these requests, so they must be encrypted.
+    // Plain http is allowed only for a model running on this machine.
+    private static Uri BuildEndpoint(Uri baseUrl)
+    {
+        if (baseUrl.Scheme != Uri.UriSchemeHttps && !(baseUrl.Scheme == Uri.UriSchemeHttp && baseUrl.IsLoopback))
+        {
+            throw new ArgumentException("OPENAI_BASE_URL must use https:// (http:// is allowed only for localhost).");
+        }
+
+        return new Uri(baseUrl.ToString().TrimEnd('/') + "/chat/completions");
     }
 
     public async Task<string> CompleteAsync(string systemPrompt, string userMessage, JsonObject? jsonSchema = null)

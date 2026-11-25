@@ -58,4 +58,22 @@ public sealed class OpenAiChatTests
 
         await Assert.ThrowsAnyAsync<Exception>(() => FakeChatHandler.FakeChat(handler).CompleteAsync("s", "u"));
     }
+
+    // The key and account balances travel in these requests, so they must be encrypted.
+    [Theory]
+    [InlineData("http://api.example.com/v1")]
+    [InlineData("ftp://api.example.com/v1")]
+    public void Constructor_RejectsUnencryptedEndpoints(string baseUrl)
+    {
+        Assert.Throws<ArgumentException>(() => new OpenAiChat(new HttpClient(), new Uri(baseUrl), "k", "m"));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("http://127.0.0.1:8080/v1")]
+    [InlineData("https://api.openai.com/v1")]
+    public void Constructor_AllowsHttpsAndLocalhost(string baseUrl)
+    {
+        _ = new OpenAiChat(new HttpClient(), new Uri(baseUrl), "k", "m");
+    }
 }

@@ -11,6 +11,8 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
 {
     internal const string Unavailable = "Sorry, I couldn't reach the assistant just now, so nothing was changed. You can still use commands - type help to see them.";
     internal const string NeedMoreDetail = "I need a bit more detail before I change anything. Please include the amount and the account(s) when you try again.";
+    internal const int MaxInputLength = 500;
+    internal const string TooLong = "That request is too long, so nothing was changed. Please keep it under 500 characters.";
     internal const string NeedNumericAmount = "I couldn't find an exact amount in your request, so nothing was changed. Please include it as a number, for example 'move $5 from savings to chequing'.";
 
     private static readonly Regex NumberPattern = new Regex(
@@ -75,6 +77,12 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         if (chat is null || result.Output is not ("ERROR UNKNOWN_COMMAND" or "ERROR INVALID_ARGUMENTS"))
         {
             return result;
+        }
+
+        // Keep pasted essays (cost, hidden instructions) away from the API.
+        if (input.Length > MaxInputLength)
+        {
+            return new CommandResult(TooLong);
         }
 
         Interpretation? interpretation;
