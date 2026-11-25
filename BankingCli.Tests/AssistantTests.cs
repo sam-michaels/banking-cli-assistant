@@ -297,4 +297,41 @@ public sealed class AssistantTests
         Assert.True(Assistant.PreservesAmounts(
             "I moved $4.00 from savings to chequing. Savings is now $0.00 and chequing has $4.00.", output, "transfer savings chequing 4"));
     }
+
+    [Theory]
+    [InlineData("Move four dollars from savings to chequing", "4")]
+    [InlineData("move 20 bucks from chequing to savings", "20")]
+    [InlineData("withdraw $4.50 from chequing", "4.5")]
+    [InlineData("deposit 1,000 into savings", "1000")]
+    [InlineData("move twenty-five dollars from savings to chequing", "25")]
+    public void AmountIsGrounded_WhenTheCustomerStatedIt(string input, string amount)
+    {
+        Assert.True(Assistant.AmountIsGrounded(input, decimal.Parse(amount, CultureInfo.InvariantCulture)));
+    }
+
+    [Theory]
+    [InlineData("move a few dollars from savings to chequing", "3")]
+    [InlineData("move 20 bucks from chequing to savings", "25")]
+    [InlineData("put some money in savings", "10")]
+    [InlineData("take a buck out of chequing", "1")]
+    public void AmountIsNotGrounded_WhenTheModelSuppliedIt(string input, string amount)
+    {
+        Assert.False(Assistant.AmountIsGrounded(input, decimal.Parse(amount, CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
+    public async Task UngroundedAmount_AsksForNumber_NoChange()
+    {
+        FakeChatHandler handler = new FakeChatHandler();
+        BankSession bank = new BankSession();
+        bank.Execute("deposit savings 10");
+        Assistant assistant = new Assistant(bank, FakeChat(handler));
+        handler.EnqueueContent("""{"action":"transfer","account":null,"from":"savings","to":"chequing","amount":3,"question":null}""");
+
+        CommandResult result = await assistant.HandleAsync("move a few dollars from savings to chequing");
+
+        Assert.Equal(Assistant.NeedNumericAmount, result.Output);
+        Assert.Equal("chequing=$0.00 | savings=$10.00", bank.Execute("balance").Output);
+        Assert.Equal(1, handler.Calls);
+    }
 }

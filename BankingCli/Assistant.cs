@@ -11,6 +11,15 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
 {
     internal const string Unavailable = "Sorry, I couldn't reach the assistant just now, so nothing was changed. You can still use commands - type help to see them.";
     internal const string NeedMoreDetail = "I need a bit more detail before I change anything. Please include the amount and the account(s) when you try again.";
+    internal const string NeedNumericAmount = "I couldn't find an exact amount in your request, so nothing was changed. Please include it as a number, for example 'move $5 from savings to chequing'.";
+
+    private static readonly Regex NumberPattern = new Regex(@"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?");
+    private static readonly HashSet<string> NumberWords = new HashSet<string>
+    {
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand"
+    };
 
     private const string InterpretPrompt = """
         You turn a bank customer's message into one banking operation. The customer has two accounts: chequing and savings ("checking" means chequing).
@@ -89,6 +98,12 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
             return new CommandResult(hasQuestion ? interpretation.Question! : NeedMoreDetail);
         }
 
+        // The model may not supply an amount the customer didn't give ("a few dollars" -> 3).
+        if (interpretation.Amount is decimal amount && !AmountIsGrounded(input, amount))
+        {
+            return new CommandResult(NeedNumericAmount);
+        }
+
         // Executed exactly once; the simulator validates accounts and amounts.
         CommandResult executed = bank.Execute(command);
 
@@ -126,6 +141,19 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
                 m.Groups[1].Value.Replace(",", "") + (m.Groups[2].Success ? "." + m.Groups[2].Value : ""),
                 CultureInfo.InvariantCulture))
             .ToList();
+
+    // If the customer wrote digits, the amount must equal one of those numbers. Without digits, the request must
+    // at least contain a number word ("four"). The word's value isn't checked; the reply states the amount moved.
+    internal static bool AmountIsGrounded(string input, decimal amount)
+    {
+        MatchCollection numbers = NumberPattern.Matches(input);
+        if (numbers.Count > 0)
+        {
+            return numbers.Any(m => decimal.Parse(m.Value.Replace(",", ""), CultureInfo.InvariantCulture) == amount);
+        }
+
+        return Regex.Split(input.ToLowerInvariant(), "[^a-z]+").Any(NumberWords.Contains);
+    }
 
     // Uses only the fields the action needs; returns null when one of them is missing.
     internal static string? BuildCommand(Interpretation i)
