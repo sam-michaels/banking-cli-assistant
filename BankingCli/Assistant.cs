@@ -22,6 +22,7 @@ internal sealed class Assistant(BankSession bank, OpenAiChat? chat)
         Set fields the operation doesn't use to null.
         Never invent or guess an operation, an amount or an account. Amounts written as words are fine ("four dollars" is 4).
         The operation must be stated by the customer (for example deposit, put in, withdraw, take out, move, transfer, send, check, show). A message such as "$5 from savings" that names no operation is unclear.
+        If the customer names any other account (for example a TFSA or a vacation account), use action "clarify" and say that only chequing and savings are available.
         Each message stands alone: you cannot see earlier messages, so never treat a message as the answer to an earlier question.
         Vague amounts such as "some", "a few", "a little", "everything", "all of it" or "half" are not amounts.
         If any required detail is missing or unclear, use action "clarify" and put a short, friendly question in "question" that says what is missing and asks the customer to send the full request again, with an example such as "move $5 from savings to chequing". Leave the other fields null.
